@@ -1,0 +1,11 @@
+services:
+  osrm:
+    image: osrm/osrm-backend
+    container_name: carenavigator-osrm
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./osrm-data:/data
+    # max-table-size raised from default 100 so bigger candidate lists work
+    command: osrm-routed --algorithm mld --max-table-size 200 /data/telangana.osrm
+    restart: unless-stopped

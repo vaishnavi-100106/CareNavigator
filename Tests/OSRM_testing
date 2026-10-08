@@ -1,0 +1,10 @@
+import pandas as pd, requests
+
+df = pd.read_csv("ml\data\hospitals_tg_clean.csv")
+
+def snap_distance(lat, lon):
+    r = requests.get(f"http://localhost:5000/nearest/v1/driving/{lon},{lat}", timeout=5).json()
+    return r["waypoints"][0]["distance"] if r.get("code") == "Ok" else None
+
+df["snap_m"] = [snap_distance(a, b) for a, b in zip(df.latitude, df.longitude)]
+print(df[df.snap_m.isna() | (df.snap_m > 300)])

@@ -1,0 +1,35 @@
+I'm building CareNavigator, a healthcare navigation system for Telangana, India. I need help continuing it. Here is the full context.
+
+## Project goal
+User enters symptoms (structured list or natural language) -> symptom processing -> ML disease prediction -> severity (Low/Moderate/High/Critical).
+- Non-critical: hospital ranking algorithm -> recommended PMJAY-empanelled hospital.
+- Critical: ambulance search (via driver app) -> real-time tracking/navigation -> emergency hospital recommendation.
+- Both branches go into an LLM explanation layer (explains disease, severity, why this hospital/ambulance, precautions, next steps in simple language) -> user decision.
+
+## Environment
+- Windows, VS Code, PowerShell, Python venv at C:\CareNavigator\.venv
+- Docker Desktop installed and working (had to enable Virtual Machine Platform / WSL2 first)
+- Project structure: backend/, docs/, ml/ (data/, models/, notebooks/, src/ with match_hospital scripts), Tests/ (OSRM_testing.py), To_delete/, .env, .env.example, .gitignore, README.md, requirements.txt
+
+## Done so far
+1. Built a dataset of ~3000 Telangana hospitals via fuzzy matching (against the PMJAY list). Columns I know of: hospital_id, hospital_name, hospital_type, address, pmjay_id, match_score, match_method (NaN pmjay_id = not empanelled). Lat/lon columns exist. I have NOT confirmed whether specialties or emergency columns exist.
+2. Set up self-hosted OSRM: downloaded southern-zone-latest.osm.pbf from Geofabrik, cropped to a Telangana bounding box (77.2,15.8,81.8,19.95) with osmium, then ran osrm-extract (car.lua), osrm-partition, osrm-customize in C:\CareNavigator\osrm-data, and ran the server via docker compose on port 5000 (MLD algorithm, --max-table-size 200). OSRM is working locally.
+3. Validated hospital coordinates with Tests/OSRM_testing.py (checks missing, swapped lat/lon, outside Telangana, duplicate coordinates, and snap distance to the nearest road via OSRM /nearest). Only 4 of ~3000 hospitals were over 300 m from a road (PHC Ibrahimpatnam 407 m, Govt Hospital Badithanda 2.4 km, Dhanvantari hospitals 436 m, Govt Hospital Dahegaon 373 m). I manually checked them and the data is fine. Outputs: ml/data/hospitals_coord_report.csv and ml/data/hospitals_clean.csv. The snap_m column is the distance from each hospital's own coordinate to the nearest OSRM road point, not from a patient.
+
+## Designed (code written, placement in project not yet confirmed)
+- hospital_ranker.py (planned at backend/services/): haversine prefilter to ~30 candidates (specialty-aware) -> OSRM Table API (one call for real road time/distance) -> weighted score on time, specialty match, PMJAY, beds, rating, with weights varying by severity (critical: time 65%, emergency-capable hospitals only) -> OSRM Route API for the top hospital's GeoJSON geometry. Includes a disease-to-specialty mapping dict (placeholder, needs expanding).
+- api.py (planned at backend/): FastAPI with /health (checks OSRM) and /recommend (lat, lon, disease, severity, pmjay_only, top_n) returning ranked hospitals plus route geometry.
+- Planned improvement: add snap_m-based off-road time to drive_min (~20 km/h over the snap gap).
+- Planned loader: rename hospital_name -> name, pmjay = pmjay_id.notna(), fallback specialties = "general medicine", fallback emergency = government hospitals.
+- .env should contain OSRM_URL=http://localhost:5000 and HOSPITALS_CSV=ml/data/hospitals_clean.csv. osrm-data/ should be in .gitignore.
+
+## Known gaps / next steps
+1. Confirm CSV column names (lat/lon, and whether specialties and emergency exist). If not, infer specialties from hospital names (Heart/Cardiac, Eye, Ortho, Neuro, Maternity, Cancer, etc.) or from PMJAY package data, and source real emergency capability.
+2. Place hospital_ranker.py and api.py in backend, fix imports, run uvicorn, and test /recommend with Hyderabad coordinates.
+3. Connect the ML disease and severity model output to /recommend.
+4. Build the LLM explanation layer (takes ranked hospitals plus route info and writes a plain-language explanation and next steps).
+5. Build the critical branch: ambulance matching (OSRM Table API with ambulances as sources), live tracking, and emergency hospital recommendation.
+6. Consider a congestion multiplier (~1.3 for Hyderabad peak hours), live bed availability, a map frontend (Leaflet using the route GeoJSON), and deployment (OSRM and API as two containers, OSRM not publicly exposed).
+
+## What I want from you now
+Start with: [write your immediate goal here, e.g. "infer specialties from hospital names and finish the /recommend endpoint"]. Ask me for any file or output you need to see (CSV columns, folder tree) rather than guessing.
